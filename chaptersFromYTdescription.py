@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # chaptersFromYT.py - parses Youtube video description to format the text for
 # encoding chapter marks into the video metadata.
-# June 8, 2023
+# June 15, 2023
 
 # USAGE: Put video file in its own directory, along with a text file containing the video description.
 # The video file should be in an mp4 container. Video description filename needs a *.description extension
@@ -11,6 +11,8 @@
 #       fails to match any timestamps. Currently, the program crashes if regex fails to match timestamps.
 #       Maybe even give user the option to still write the description to the video metadata even if
 #       there are no chapters
+
+# Also TODO: Put text after video description in the metadata as well.
 
 from pathlib import Path
 import re, datetime, subprocess, shutil
@@ -29,7 +31,7 @@ def check_4_name_and_description():
         exit(1)
     else:
         shutil.copy(descriptions[0], 'description.txt')
-        #descriptions[0].rename('description.txt')
+
     
     mp4_files = list(Path.cwd().glob('*.mp4'))
     if len(mp4_files) != 1:
@@ -41,17 +43,15 @@ def check_4_name_and_description():
 
 def wrangle_description():
     # The chapter embedding script needs a chapters.txt file specifically formatted like this:
-    # H:MM:SS <Some Chapter Title>
+    # [H]H:MM:SS <Some Chapter Title>
     # Much of this function is making sure it gets formatted that way.
 
-    def format_timestamps(entire_ts):
-        hms = entire_ts.split(':')
+    def convert_to_dto(entire_ts):
+        hms = [int(x) for x in entire_ts.split(':')]
         while len(hms) < 3:   # add hours and minutes in if they are not there yet
-            hms.insert(0, '0')
-        while len(hms[1]) < 2:  #ensure there are 2 digits recorded for the minutes
-            hms[1] = '0' + hms[1]
-        return (':'.join(hms))
-        
+            hms.insert(0, 0)
+        return datetime.datetime(*((1900, 1, 1) + tuple(hms)))  # Give it a fake date so time delta addition works.
+
     with open('description.txt', 'r') as f:
         desc_text = f.read()
 
@@ -64,22 +64,24 @@ def wrangle_description():
     for matchNum, match in enumerate(matches, start=1):
         if matchNum == 1:
             timestamps_beginning = match.start()
-        timestamp = format_timestamps(match.group(1))
-        chapters.append(timestamp + ' ' + match.group(2) + '\n')
+        timestamp = convert_to_dto(match.group(1))
+        chapters.append([timestamp, match.group(2)])
         last_timestamp = timestamp
+        timestamps_ending = match.end()
     
-    # chapters.txt file need a final chapter that's not actually recorded to the metadata
-    dummy_time = datetime.datetime.strptime(last_timestamp, "%H:%M:%S") + datetime.timedelta(seconds=5)
-    dummy_time = [int(x) for x in dummy_time.strftime('%H:%M:%S').split(':')]
-    for i, x in enumerate(dummy_time[1:], start=1):  #make sure minutes/seconds are formatted how we need
-        dummy_time[i] = f'{x:02d}'
-    dummy_time = [str(x) for x in dummy_time]   # convert it all back to a string
-    dummy_time = ':'.join(dummy_time)   # turn list back into a string
-    chapters.append(dummy_time + " ending chapter (placeholder)\n")
+    chapters.sort(key=lambda x: x[0])   # put timestamps in chronological order, otherwise ffmpeg gets angry
+
+    # chapters.txt file need a final chapter even tho it's not actually recorded to metadata
+    dummy_time = last_timestamp + datetime.timedelta(seconds=5)
+    chapters.append([dummy_time, "ending chapter (placeholder)"])
+    
+    for i, _ in enumerate(chapters):
+        chapters[i][0] = chapters[i][0].strftime("%H:%M:%S")
+        chapters[i] = ' '.join(chapters[i]) + '\n'
 
     with open('chapters.txt', 'w') as f:
         f.writelines(chapters)
-    
+
     # Function returns the video description but truncates the timestamps and everything that follows them
     return(desc_text[:timestamps_beginning])
 
