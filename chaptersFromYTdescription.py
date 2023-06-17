@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # chaptersFromYT.py - parses Youtube video description to format the text for
 # encoding chapter marks into the video metadata.
-# June 15, 2023
+# June 17, 2023
 
 # USAGE: Put video file in its own directory, along with a text file containing the video description.
 # The video file should be in an mp4 container. Video description filename needs a *.description extension
@@ -12,7 +12,7 @@
 #       Maybe even give user the option to still write the description to the video metadata even if
 #       there are no chapters
 
-# Also TODO: Put text after video description in the metadata as well.
+# Also TODO: Put video destription text that comes after the timestamps in the metadata as well.
 
 from pathlib import Path
 import re, datetime, subprocess, shutil
@@ -83,6 +83,7 @@ def wrangle_description():
         f.writelines(chapters)
 
     # Function returns the video description but truncates the timestamps and everything that follows them
+    #return(desc_text[:timestamps_beginning].strip(",.:\n "))
     return(desc_text[:timestamps_beginning])
 
 def add_description_to_mdatafile(contents):
@@ -120,8 +121,8 @@ def apply_metadata(original_video):
         print('A new video file has been created. ', end='')
 
     elif response in no_responses:
-        print('When you are satisfied with chapters.txt, you will have to run ffmpeg yourself to apply changes.')
-        print('The command will look something like this: $ %s' % ' '.join(ffmpeg_cmd))
+        print('* When you are satisfied with chapters.txt, you will have to run the videochaptermaker.py script and then')
+        print('run ffmpeg yourself to apply changes.\nInscrutions for the videochaptermaker script are written in the comments at the end of the script.')
         print()
 
 
